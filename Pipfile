@@ -4,7 +4,12 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-opencv-python = "*"
+opencv-python = "==4.5.5.64"
+keyboard = "==0.13.5"
+numpy = "==1.22.3"
+pygame = "*"
+pandas = "*"
+lxml = "*"
 
 [dev-packages]
 
