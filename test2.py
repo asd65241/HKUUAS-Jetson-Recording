@@ -3,21 +3,26 @@
 # Include Libs
 import cv2
 import numpy as np
-import keyboard
 from datetime import datetime
 
 
 # Flags
 record = False
 pause = False
-deviceID = 0
+textChanged = True
+
+
+# Device ID
 # 0 = USB webcam
 # 1 = MIPI camera
 # 2 = IP camera
+deviceID = 0
+
 noPreview = 0
 textOnly = True
 
-
+if textOnly:
+    from kbhit import KBHit
 
 # Global Vars
 videoNameTemplate = "uas_footage_"
@@ -65,6 +70,8 @@ def readRCFile():
         # Read first line from config file
         configFile = open(".uasrecrc", "r+")
         videoPathTemplate = configFile.readline()
+        if videoPathTemplate[-1] == '\n':
+            videoPathTemplate = videoPathTemplate[:-1]
     except FileNotFoundError as e:
         # Create config file if it doesn't exist
         print("File not found")
@@ -76,7 +83,7 @@ def readRCFile():
 
 
 def main():
-    global record, SampleText, videoNameTemplate, videoPathTemplate, putTextTimeout, putTextTimeoutMax, pause, deviceID, noPreview
+    global record, SampleText, videoNameTemplate, videoPathTemplate, putTextTimeout, putTextTimeoutMax, pause, deviceID, noPreview, textOnly, textChanged
     # capture frames from a camera with device index=0
     # Here we init the capture device (either a MIPI camera or a regular usb web camera)
     print('Entering main')
@@ -99,7 +106,8 @@ def main():
     now = datetime.now()
     videoNameString = videoPathTemplate + videoNameTemplate + now.strftime("%m_%d_%Y_%H%M%S") + ".mp4"
     print(f"Path name is {videoNameString}")
-
+    if textOnly:
+        kb = KBHit()
 
 
 
@@ -162,7 +170,8 @@ def main():
             SampleText = []
         for line in range(len(SampleText)):
             if textOnly:
-                print(SampleText[line])
+                if textChanged:
+                    print(SampleText[line])
             else:
                 if noPreview == 0:
                     cv2.putText(frame, 
@@ -180,89 +189,99 @@ def main():
                         (255, 255, 255),
                         2,
                         cv2.LINE_4)
+        textChanged = False
 
         # Quick fix overlapping text in text-Only mode
         if putTextTimeout==0:
             dummy = np.zeros((height, width, 3), dtype = "uint8")
         
         # Display the frame
-        if noPreview == 0:
-            cv2.imshow('UAS Recorder',frame) 
-        else:
-            frame = dummy
-            cv2.imshow('UAS Recorder', frame)
+        if not textOnly:
+            if noPreview == 0:
+                cv2.imshow('UAS Recorder',frame) 
+            else:
+                frame = dummy
+                cv2.imshow('UAS Recorder', frame)
 
         # Wait for 25ms
         # need to deal with noPreview mode
+        key = 'x'
         if textOnly:
-            key = keyboard.read_key()
+            if kb.kbhit():
+                key = ord(kb.getch())
+                # print(f"textOnly: {chr(key)} is pressed")
         else:
             key = cv2.waitKey(1)
         if key == ord('q'):
+            print("BREAKING")
             break
-        elif key == ord('r'):
+        elif key!='x':
+            textChanged = True
             putTextTimeout = putTextTimeoutMax
-            # print("R pressed")
-            if not record:
-                record = True
-                videoNameString = videoPathTemplate + videoNameTemplate + now.strftime("%m_%d_%Y_%H%M%S") + ".mp4"
-                writer= cv2.VideoWriter(videoNameString, cv2.VideoWriter_fourcc(*'DIVX'), 20, (width,height))
-            else:
-                pause = not(pause)
-            # print(f"Record is now {pause}")
-            recordString = "N/A"
-            if not(record) and not(pause):
-                recordString = ""
-            elif record and not(pause):
-                recordString = "REC"
-            elif record and pause:
-                recordString = "PAUSED"
-            SampleText = [recordString]
-            # if pause:
-            #     print("PAUSED")
-        elif key == ord('h'):
-            putTextTimeout = putTextTimeoutMax
-            SampleText = ["[r] to start or pause recording", "[s] to stop and save recording", "[t] for status", "[+] or [-] to change delay", "[p] to turn on/off live preview", "[h] to quit"]
-        elif key == ord('t'):
-            putTextTimeout = putTextTimeoutMax*2
-            isRecordString = "YES" if record and not(pause) else "NO"
-            isPauseString = "N/A"
-            if record and not(pause):
-                isPauseString = "NO"
-            elif record and pause:
-                isPauseString = "YES"
-            elif not (record) and not (pause):
-                isPauseString = "STOPPED REC"
-                SampleText = [f"Recording? = {isRecordString}", 
-                        f"Paused? = {isPauseString}", f"FileName? = {videoNameString}",
-                         f"Delay? = {putTextTimeoutMax}", f"DIMENSION? = {width}X{height}"]
-        elif key == ord('s'):
-            putTextTimeout = putTextTimeoutMax*2
-            writer.release()        
-            SampleText = [f"Saved to {videoNameString}", f"at {videoPathTemplate}"]
-            record = False
-            pause = False
-        elif key == ord('=') or key == ord('+'):
-            putTextTimeout = putTextTimeoutMax
-            if putTextTimeoutMax<100:
-                putTextTimeoutMax = putTextTimeoutMax+5
-                if putTextTimeoutMax==100:
-                    SampleText = [f"Delay increased to {putTextTimeoutMax} (MAX)"]
+            if textOnly and key != 'x':
+                commandTime = datetime.now()
+                timeStr = commandTime.strftime("%H:%M:%S")
+                promptNow = f"[{timeStr}] {chr(key)} sent"
+                print(promptNow)
+            if key == ord('r'):
+                # print("R pressed")
+                if not record:
+                    record = True
+                    videoNameString = videoPathTemplate + videoNameTemplate + now.strftime("%m_%d_%Y_%H%M%S") + ".mp4"
+                    writer= cv2.VideoWriter(videoNameString, cv2.VideoWriter_fourcc(*'DIVX'), 20, (width,height))
                 else:
-                    SampleText = [f"Delay increased to {putTextTimeoutMax}"]
-        elif key == ord('-'):
-            putTextTimeout = putTextTimeoutMax
-            if putTextTimeoutMax>0:
-                putTextTimeoutMax = putTextTimeoutMax-5
-                if putTextTimeoutMax==0:
-                    SampleText = [f"Delay increased to {putTextTimeoutMax} (MIN)"]
+                    pause = not(pause)
+                # print(f"Record is now {pause}")
+                recordString = "N/A"
+                if not(record) and not(pause):
+                    recordString = ""
+                elif record and not(pause):
+                    recordString = "REC"
+                elif record and pause:
+                    recordString = "PAUSED"
+                SampleText = [recordString]
+                # if pause:
+                #     print("PAUSED")
+            elif key == ord('h'):
+                SampleText = ["[r] to start or pause recording", "[s] to stop and save recording", "[t] for status", "[+] or [-] to change delay", "[p] to turn on/off live preview", "[h] to quit"]
+            elif key == ord('t'):
+                isRecordString = "YES" if record and not(pause) else "NO"
+                isPauseString = "N/A"
+                if record and not(pause):
+                    isPauseString = "NO"
+                elif record and pause:
+                    isPauseString = "YES"
+                elif not (record) and not (pause):
+                    isPauseString = "STOPPED REC"
+                    SampleText = [f"Recording? = {isRecordString}", 
+                            f"Paused? = {isPauseString}", f"FileName? = {videoNameString}",
+                            f"Delay? = {putTextTimeoutMax}", f"DIMENSION? = {width}X{height}"]
+            elif key == ord('s'):
+                if record:
+                    writer.release()        
+                    SampleText = [f"Saved to {videoNameString}", f"at {videoPathTemplate}"]
+                    record = False
+                    pause = False
                 else:
-                    SampleText = [f"Delay increased to {putTextTimeoutMax}"]
-        elif key == ord('p'):
-            putTextTimeout = putTextTimeoutMax
-            noPreview = 1 - noPreview
-            previewModeString = "ON" if noPreview == 1 else "OFF"
-            SampleText = [f"No Preview Mode is {previewModeString}"]
+                    SampleText = ["Nothing is being recorded", "No need to save"]
+            elif key == ord('=') or key == ord('+'):
+                if putTextTimeoutMax<100:
+                    putTextTimeoutMax = putTextTimeoutMax+5
+                    if putTextTimeoutMax==100:
+                        SampleText = [f"Delay increased to {putTextTimeoutMax} (MAX)"]
+                    else:
+                        SampleText = [f"Delay increased to {putTextTimeoutMax}"]
+            elif key == ord('-'):
+                if putTextTimeoutMax>0:
+                    putTextTimeoutMax = putTextTimeoutMax-5
+                    if putTextTimeoutMax==0:
+                        SampleText = [f"Delay increased to {putTextTimeoutMax} (MIN)"]
+                    else:
+                        SampleText = [f"Delay increased to {putTextTimeoutMax}"]
+            elif key == ord('p'):
+                noPreview = 1 - noPreview
+                previewModeString = "ON" if noPreview == 1 else "OFF"
+                SampleText = [f"No Preview Mode is {previewModeString}"]
     # Clean up
     cap.release()
     writer.release()
