@@ -12,6 +12,12 @@ pause = False
 textChanged = True
 
 
+# Autogen zone
+cap_width = 800
+cap_height = 480
+
+
+
 # Device ID
 # 0 = USB webcam
 # 1 = MIPI camera
@@ -127,6 +133,11 @@ def main():
         print(gstreamer_pipeline(flip_method=0))
 
     # Initialize frame dimension and recording file writer
+
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, cap_width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, cap_height)
+
+
     width= int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height= int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     writer= cv2.VideoWriter("Dummy.mp4", cv2.VideoWriter_fourcc(*'DIVX'), 20, (width,height))
